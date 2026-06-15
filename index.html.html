@@ -1,0 +1,258 @@
+
+<style>
+  .container { padding: 1rem 0; font-family: var(--font-sans); }
+  .grid-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; margin: 0 auto; }
+  td { width: 32px; height: 32px; text-align: center; vertical-align: middle; font-size: 15px; font-weight: 500; cursor: pointer; border: 0.5px solid var(--color-border-tertiary); color: var(--color-text-primary); user-select: none; transition: background 0.1s; }
+  td.found-0  { background: #CECBF6; color: #3C3489; }
+  td.found-1  { background: #9FE1CB; color: #085041; }
+  td.found-2  { background: #F5C4B3; color: #712B13; }
+  td.found-3  { background: #F4C0D1; color: #72243E; }
+  td.found-4  { background: #B5D4F4; color: #0C447C; }
+  td.found-5  { background: #C0DD97; color: #27500A; }
+  td.found-6  { background: #FAC775; color: #633806; }
+  td.found-7  { background: #F7C1C1; color: #791F1F; }
+  td.found-8  { background: #D3D1C7; color: #444441; }
+  td.found-9  { background: #F0997B; color: #4A1B0C; }
+  td.selecting { background: var(--color-background-info); color: var(--color-text-info); }
+  .word-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 1.25rem; }
+  .word-chip { font-size: 13px; padding: 4px 12px; border-radius: var(--border-radius-md); border: 0.5px solid var(--color-border-secondary); color: var(--color-text-secondary); background: var(--color-background-secondary); }
+  .word-chip.found-0  { background: #EEEDFE; color: #3C3489; border-color: #AFA9EC; text-decoration: line-through; }
+  .word-chip.found-1  { background: #E1F5EE; color: #085041; border-color: #5DCAA5; text-decoration: line-through; }
+  .word-chip.found-2  { background: #FAECE7; color: #712B13; border-color: #F0997B; text-decoration: line-through; }
+  .word-chip.found-3  { background: #FBEAF0; color: #72243E; border-color: #ED93B1; text-decoration: line-through; }
+  .word-chip.found-4  { background: #E6F1FB; color: #0C447C; border-color: #85B7EB; text-decoration: line-through; }
+  .word-chip.found-5  { background: #EAF3DE; color: #27500A; border-color: #97C459; text-decoration: line-through; }
+  .word-chip.found-6  { background: #FAEEDA; color: #633806; border-color: #EF9F27; text-decoration: line-through; }
+  .word-chip.found-7  { background: #FCEBEB; color: #791F1F; border-color: #F09595; text-decoration: line-through; }
+  .word-chip.found-8  { background: #F1EFE8; color: #444441; border-color: #B4B2A9; text-decoration: line-through; }
+  .word-chip.found-9  { background: #FAECE7; color: #4A1B0C; border-color: #D85A30; text-decoration: line-through; }
+  .status { font-size: 13px; color: var(--color-text-secondary); margin-top: 1rem; min-height: 20px; }
+  .congrats { font-size: 15px; font-weight: 500; color: var(--color-text-success); margin-top: 1rem; }
+  h2.title { font-size: 16px; font-weight: 500; margin: 0 0 1rem; color: var(--color-text-primary); }
+  .btn-reset { margin-top: 1rem; font-size: 13px; padding: 6px 16px; }
+</style>
+<div class="container">
+  <h2 class="sr-only">Sopa de letras sobre investigación: encuentra las palabras ocultas en la cuadrícula</h2>
+  <h2 class="title">Sopa de letras — Metodología de investigación</h2>
+  <div class="grid-wrap"><table id="grid"></table></div>
+  <div class="word-list" id="word-list"></div>
+  <div class="status" id="status">Haz clic en la primera y última letra de cada palabra para marcarla.</div>
+  <button class="btn-reset" onclick="resetGame()">Reiniciar</button>
+</div>
+
+<script>
+const WORDS_RAW = [
+  "CUANTITATIVO",
+  "TAMANODEMUESTA",
+  "ENCUESTAS",
+  "ENTREVISTAS",
+  "OBSERVACION",
+  "EXPERIMENTOS",
+  "NIVELDECONFIANZA",
+  "DESVIACIONESTANDAR",
+  "MARGENDEERROR",
+  "CUALITATIVO"
+];
+
+const DISPLAY_LABELS = [
+  "Cuantitativo",
+  "Tamaño de muestra",
+  "Encuestas",
+  "Entrevistas",
+  "Observación",
+  "Experimentos",
+  "Nivel de confianza",
+  "Desviación estándar",
+  "Margen de error",
+  "Cualitativo"
+];
+
+// Normalized words (no spaces, accents removed, uppercase)
+function normalize(s) {
+  return s.toUpperCase()
+    .replace(/\s+/g, '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+const WORDS = WORDS_RAW.map(normalize);
+
+const ROWS = 22, COLS = 22;
+let grid = [], placed = [], selecting = [], foundWords = new Set();
+
+const DIRS = [
+  [0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]
+];
+
+function canPlace(word, r, c, dr, dc) {
+  for (let i = 0; i < word.length; i++) {
+    const nr = r + i*dr, nc = c + i*dc;
+    if (nr < 0 || nr >= ROWS || nc < 0 || nc >= COLS) return false;
+    if (grid[nr][nc] && grid[nr][nc] !== word[i]) return false;
+  }
+  return true;
+}
+
+function placeWord(word, r, c, dr, dc) {
+  const cells = [];
+  for (let i = 0; i < word.length; i++) {
+    const nr = r + i*dr, nc = c + i*dc;
+    grid[nr][nc] = word[i];
+    cells.push([nr, nc]);
+  }
+  return cells;
+}
+
+function buildGrid() {
+  grid = Array.from({length: ROWS}, () => Array(COLS).fill(''));
+  placed = [];
+  const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+
+  for (let wi = 0; wi < WORDS.length; wi++) {
+    const word = WORDS[wi];
+    let placed_ok = false;
+    const attempts = [];
+    for (let i = 0; i < DIRS.length; i++) attempts.push(i);
+    // shuffle dirs
+    for (let i = attempts.length-1; i > 0; i--) {
+      const j = Math.floor(Math.random()*(i+1));
+      [attempts[i],attempts[j]]=[attempts[j],attempts[i]];
+    }
+    for (let t = 0; t < 500 && !placed_ok; t++) {
+      const dir = DIRS[attempts[t % DIRS.length]];
+      const r = Math.floor(Math.random()*ROWS);
+      const c = Math.floor(Math.random()*COLS);
+      if (canPlace(word, r, c, dir[0], dir[1])) {
+        const cells = placeWord(word, r, c, dir[0], dir[1]);
+        placed.push({word, cells, index: wi});
+        placed_ok = true;
+      }
+    }
+    if (!placed_ok) {
+      // fallback: force horizontal
+      for (let r = 0; r < ROWS && !placed_ok; r++) {
+        for (let c = 0; c <= COLS - word.length && !placed_ok; c++) {
+          if (canPlace(word, r, c, 0, 1)) {
+            const cells = placeWord(word, r, c, 0, 1);
+            placed.push({word, cells, index: wi});
+            placed_ok = true;
+          }
+        }
+      }
+    }
+  }
+
+  // Fill blanks
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (!grid[r][c]) grid[r][c] = LETTERS[Math.floor(Math.random()*26)];
+}
+
+function renderGrid() {
+  const table = document.getElementById('grid');
+  table.innerHTML = '';
+  for (let r = 0; r < ROWS; r++) {
+    const tr = document.createElement('tr');
+    for (let c = 0; c < COLS; c++) {
+      const td = document.createElement('td');
+      td.textContent = grid[r][c];
+      td.dataset.r = r; td.dataset.c = c;
+      td.addEventListener('click', () => onCellClick(r, c));
+      tr.appendChild(td);
+    }
+    table.appendChild(tr);
+  }
+}
+
+function getCell(r, c) {
+  return document.querySelector(`#grid td[data-r="${r}"][data-c="${c}"]`);
+}
+
+function clearSelecting() {
+  document.querySelectorAll('#grid td.selecting').forEach(td => td.classList.remove('selecting'));
+  selecting = [];
+}
+
+function getCellsBetween(r1, c1, r2, c2) {
+  const dr = Math.sign(r2-r1), dc = Math.sign(c2-c1);
+  if (dr === 0 && dc === 0) return [[r1,c1]];
+  if (dr !== 0 && dc !== 0 && Math.abs(r2-r1) !== Math.abs(c2-c1)) return null;
+  const cells = [];
+  let r = r1, c = c1;
+  while (true) {
+    cells.push([r,c]);
+    if (r === r2 && c === c2) break;
+    r += dr; c += dc;
+    if (cells.length > ROWS + COLS) return null;
+  }
+  return cells;
+}
+
+function onCellClick(r, c) {
+  if (selecting.length === 0) {
+    selecting = [[r,c]];
+    getCell(r,c).classList.add('selecting');
+    document.getElementById('status').textContent = 'Ahora haz clic en la última letra.';
+  } else if (selecting.length === 1) {
+    const [r1,c1] = selecting[0];
+    if (r1===r && c1===c) { clearSelecting(); document.getElementById('status').textContent = 'Selección cancelada.'; return; }
+    const cells = getCellsBetween(r1, c1, r, c);
+    if (!cells) {
+      clearSelecting();
+      document.getElementById('status').textContent = 'Selección inválida. Intenta de nuevo.';
+      return;
+    }
+    const selected = cells.map(([rr,cc]) => grid[rr][cc]).join('');
+    const selectedRev = [...selected].reverse().join('');
+
+    let found = null;
+    for (const p of placed) {
+      if (!foundWords.has(p.index)) {
+        const pStr = p.cells.map(([rr,cc]) => grid[rr][cc]).join('');
+        if (selected === pStr || selectedRev === pStr) {
+          found = p;
+          break;
+        }
+      }
+    }
+
+    if (found) {
+      foundWords.add(found.index);
+      found.cells.forEach(([rr,cc]) => {
+        const td = getCell(rr,cc);
+        td.classList.remove('selecting');
+        td.classList.add('found-'+found.index);
+      });
+      clearSelecting();
+      document.getElementById('word-list').querySelectorAll('.word-chip')[found.index].className = 'word-chip found-'+found.index;
+      if (foundWords.size === WORDS.length) {
+        document.getElementById('status').innerHTML = '';
+        document.getElementById('status').insertAdjacentHTML('afterend','<div class="congrats">¡Felicidades! Encontraste todas las palabras 🎉</div>');
+      } else {
+        document.getElementById('status').textContent = `¡Correcto! Quedan ${WORDS.length - foundWords.size} palabras.`;
+      }
+    } else {
+      clearSelecting();
+      document.getElementById('status').textContent = 'No coincide con ninguna palabra. Intenta de nuevo.';
+    }
+  }
+}
+
+function renderWordList() {
+  const el = document.getElementById('word-list');
+  el.innerHTML = DISPLAY_LABELS.map((w,i) => `<span class="word-chip" id="chip-${i}">${w}</span>`).join('');
+}
+
+function resetGame() {
+  foundWords = new Set();
+  selecting = [];
+  const old = document.querySelector('.congrats');
+  if (old) old.remove();
+  buildGrid();
+  renderGrid();
+  renderWordList();
+  document.getElementById('status').textContent = 'Haz clic en la primera y última letra de cada palabra para marcarla.';
+}
+
+resetGame();
+</script>
